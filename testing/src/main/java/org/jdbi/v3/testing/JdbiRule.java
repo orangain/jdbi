@@ -101,6 +101,14 @@ public abstract class JdbiRule extends ExternalResource {
     }
 
     /**
+     * Create a JdbiRule with an in-memory HyperSQL database instance.
+     * Your project must depend on the {@code hsqldb} database artifact.
+     */
+    public static JdbiRule hsql() {
+        return new EmbeddedHsqlJdbiRule();
+    }
+
+    /**
      * Run database migration scripts from {@code db/migration} on the classpath, using Flyway.
      * @deprecated use {@link #withMigration(Migration)}
      * @return this
