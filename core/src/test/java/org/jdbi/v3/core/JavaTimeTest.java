@@ -18,6 +18,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
+import java.time.OffsetTime;
 import java.time.Year;
 import java.time.YearMonth;
 import java.time.ZoneId;
@@ -79,6 +80,16 @@ public class JavaTimeTest {
         insert(now);
         scatterTimeZones();
         assertThat(get(LocalTime.class).atOffset(ZONE_OUT).withOffsetSameInstant(ZONE_IN).toLocalTime()).isEqualTo(now.truncatedTo(SECONDS));
+    }
+
+    @Test
+    public void offsetTime() {
+        OffsetTime now = OffsetTime.now();
+
+        createTable("time");
+        insert(now);
+        scatterTimeZones();
+        assertThat(get(OffsetTime.class).withOffsetSameLocal(ZONE_IN)).isEqualTo(now.truncatedTo(SECONDS));
     }
 
     @Test

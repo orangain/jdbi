@@ -24,6 +24,7 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.Month;
 import java.time.OffsetDateTime;
+import java.time.OffsetTime;
 import java.time.Year;
 import java.time.YearMonth;
 import java.time.ZoneId;
@@ -56,6 +57,7 @@ class JavaTimeMapperFactory implements ColumnMapperFactory {
         mappers.put(Instant.class, new GetterMapper<>(JavaTimeMapperFactory::getInstant));
         mappers.put(LocalDate.class, new GetterMapper<>(JavaTimeMapperFactory::getLocalDate));
         mappers.put(LocalTime.class, new GetterMapper<>(JavaTimeMapperFactory::getLocalTime));
+        mappers.put(OffsetTime.class, new GetterMapper<>(JavaTimeMapperFactory::getOffsetTime));
         mappers.put(LocalDateTime.class, new GetterMapper<>(JavaTimeMapperFactory::getLocalDateTime));
         mappers.put(OffsetDateTime.class, new GetterMapper<>(JavaTimeMapperFactory::getOffsetDateTime));
         mappers.put(ZonedDateTime.class, new GetterMapper<>(JavaTimeMapperFactory::getZonedDateTime));
@@ -100,6 +102,11 @@ class JavaTimeMapperFactory implements ColumnMapperFactory {
     private static LocalTime getLocalTime(ResultSet r, int i) throws SQLException {
         Time time = r.getTime(i);
         return time == null ? null : time.toLocalTime();
+    }
+
+    private static OffsetTime getOffsetTime(ResultSet r, int i) throws SQLException {
+        Timestamp timestamp = r.getTimestamp(i);
+        return timestamp == null ? null : OffsetTime.ofInstant(timestamp.toInstant(), ZoneId.systemDefault());
     }
 
     private static ZoneId getZoneId(ResultSet r, int i) throws SQLException {
