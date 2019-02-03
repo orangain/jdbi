@@ -67,6 +67,7 @@
         <module>generator</module>
         <module>benchmark</module>
         <module>testing</module>
+        <module>hsql</module>
     </modules>
 
     <scm>
