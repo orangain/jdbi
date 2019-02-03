@@ -21,6 +21,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
+import java.time.Year;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 
@@ -33,5 +34,6 @@ class JavaTimeArgumentFactory extends DelegatingArgumentFactory {
         register(OffsetDateTime.class, Types.TIMESTAMP, (p, i, v) -> p.setTimestamp(i, Timestamp.from(v.toInstant())));
         register(ZonedDateTime.class, Types.TIMESTAMP, (p, i, v) -> p.setTimestamp(i, Timestamp.from(v.toInstant())));
         register(ZoneOffset.class, Types.VARCHAR, (p, i, v) -> p.setString(i, v.getId()));
+        register(Year.class, Types.VARCHAR, (p, i, v) -> p.setInt(i, v.getValue()));
     }
 }
