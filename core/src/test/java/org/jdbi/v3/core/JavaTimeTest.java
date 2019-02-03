@@ -118,6 +118,15 @@ public class JavaTimeTest {
         assertThat(get(ZoneId.class)).isEqualTo(zone);
     }
 
+    @Test
+    public void zoneOffset() {
+        ZoneOffset zone = ZoneOffset.ofHours(6);
+
+        createTable("varchar(50)");
+        insert(zone);
+        assertThat(get(ZoneOffset.class)).isEqualTo(zone);
+    }
+
     private void createTable(String columnType) {
         h.createUpdate("create table foo (bar <type>)").define("type", columnType).execute();
     }
