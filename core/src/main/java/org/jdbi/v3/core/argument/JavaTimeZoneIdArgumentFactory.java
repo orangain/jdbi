@@ -19,6 +19,11 @@ import java.time.ZoneId;
 import org.jdbi.v3.core.argument.internal.strategies.LoggableBinderArgument;
 import org.jdbi.v3.core.config.ConfigRegistry;
 
+// TODO jdbi4 make internal
+/**
+ * @deprecated should not be API
+ */
+@Deprecated
 public class JavaTimeZoneIdArgumentFactory extends AbstractArgumentFactory<ZoneId> {
     public JavaTimeZoneIdArgumentFactory() {
         super(Types.VARCHAR);
