@@ -22,8 +22,10 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.Month;
 import java.time.OffsetDateTime;
 import java.time.Year;
+import java.time.YearMonth;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
@@ -60,6 +62,7 @@ class JavaTimeMapperFactory implements ColumnMapperFactory {
         mappers.put(ZoneId.class, new GetterMapper<>(JavaTimeMapperFactory::getZoneId));
         mappers.put(ZoneOffset.class, new GetterMapper<>(JavaTimeMapperFactory::getZoneOffset));
         mappers.put(Year.class, new GetterMapper<>(JavaTimeMapperFactory::getYear));
+        mappers.put(YearMonth.class, new GetterMapper<>(JavaTimeMapperFactory::getYearMonth));
     }
 
     @Override
@@ -112,5 +115,14 @@ class JavaTimeMapperFactory implements ColumnMapperFactory {
     private static Year getYear(ResultSet r, int i) throws SQLException {
         int year = r.getInt(i);
         return r.wasNull() ? null : Year.of(year);
+    }
+
+    private static YearMonth getYearMonth(ResultSet r, int i) throws SQLException {
+        int yearMonth = r.getInt(i);
+        if (r.wasNull()) {
+            return null;
+        }
+        int year = yearMonth / 100;
+        return YearMonth.of(year, Month.of(yearMonth - year * 100));
     }
 }
