@@ -4,6 +4,9 @@
   - kotlin-sqlobject: fix package declaration of RegisterKotlinMappers
   - LocalTransactionHandler: bind more closely to Handle for performance and to avoid leaks
   - Update: add `one` helper method
+  - Added HyperSQL (HSQL) database integration.
+    - This mainly offers less painful `java.time` support.
+    - Includes a `DatabaseRule` in `core` and `JdbiRule` in `testing`.
 
 # 3.13.0
   - Kotlin: respect default values in methods when passed null, #1690
