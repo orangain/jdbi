@@ -124,10 +124,7 @@ class KotlinMapper(clazz: Class<*>, private val prefix: String = "") : RowMapper
 
         val memberPropertyMappers = memberProperties
             .associate { property ->
-                property to ParamData(
-                    ParamResolution.MAPPED,
-                    resolveMemberPropertyMapper(ctx, property, columnNames, columnNameMatchers, unmatchedColumns),
-                    property.javaField?.getAnnotation(PropagateNull::class.java) != null)
+                property to resolveMemberPropertyMapper(ctx, property, columnNames, columnNameMatchers, unmatchedColumns)
             }
 
         if (explicitlyMappedConstructorParameters.isEmpty() && memberPropertyMappers.isEmpty()) {
@@ -241,15 +238,16 @@ class KotlinMapper(clazz: Class<*>, private val prefix: String = "") : RowMapper
                                             columnNames: List<String>,
                                             columnNameMatchers: List<ColumnNameMatcher>,
                                             unmatchedColumns: MutableSet<String>
-    ): RowMapper<*>? {
+    ): ParamData {
         val propertyName = property.propName()
         val nested = property.javaField?.getAnnotation(Nested::class.java)
+        val propagateNull = property.javaField?.getAnnotation(PropagateNull::class.java) != null
 
         if (nested == null) {
             val possibleColumnIndex : OptionalInt = findColumnIndex(propertyName, columnNames, columnNameMatchers, { property.name })
             val columnIndex : Int = when {
                 possibleColumnIndex.isPresent -> possibleColumnIndex.asInt
-                ! property.isLateinit -> return null
+                ! property.isLateinit -> return ParamData(ParamResolution.UNMAPPED, null, propagateNull)
                 else -> throw IllegalArgumentException(
                     "Member '${property.name}' of class '${kClass.simpleName} has no column in the result set but is lateinit. " +
                         "Verify that your result set has the columns expected, or annotate the " +
@@ -259,7 +257,7 @@ class KotlinMapper(clazz: Class<*>, private val prefix: String = "") : RowMapper
 
             val type = property.returnType.javaType
             return ctx.findColumnMapperFor(type)
-                    .map { mapper -> SingleColumnMapper(mapper, columnIndex + 1) }
+                    .map { mapper -> ParamData(ParamResolution.MAPPED, SingleColumnMapper(mapper, columnIndex + 1), propagateNull) }
                     .orElseThrow {
                         IllegalArgumentException(
                             "Could not find column mapper for type '$type' of property " +
@@ -272,14 +270,17 @@ class KotlinMapper(clazz: Class<*>, private val prefix: String = "") : RowMapper
             val nestedPrefix = prefix + nested.value
 
             if (anyColumnsStartWithPrefix(columnNames, nestedPrefix, columnNameMatchers)) {
-                return nestedPropertyMappers
-                    .computeIfAbsent(property) { p -> KotlinMapper(p.returnType.jvmErasure.java, nestedPrefix) }
-                    .specialize0(ctx, columnNames, columnNameMatchers, unmatchedColumns)
-                    .orElse(null)
+                return ParamData(
+                    ParamResolution.MAPPED,
+                    nestedPropertyMappers
+                        .computeIfAbsent(property) { p -> KotlinMapper(p.returnType.jvmErasure.java, nestedPrefix) }
+                        .specialize0(ctx, columnNames, columnNameMatchers, unmatchedColumns)
+                        .orElse(null),
+                    propagateNull)
             }
         }
 
-        return null
+        return ParamData(ParamResolution.UNMAPPED, null, propagateNull)
     }
 
     private fun KParameter.paramName(): String? {
