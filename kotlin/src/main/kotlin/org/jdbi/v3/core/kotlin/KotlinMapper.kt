@@ -28,6 +28,7 @@ import org.jdbi.v3.core.mapper.reflect.ReflectionMappers
 import org.jdbi.v3.core.mapper.reflect.internal.PojoMapper
 import org.jdbi.v3.core.qualifier.QualifiedType
 import org.jdbi.v3.core.statement.StatementContext
+import org.slf4j.LoggerFactory
 import java.sql.ResultSet
 import java.sql.ResultSetMetaData
 import java.util.Optional
@@ -48,6 +49,9 @@ import kotlin.reflect.jvm.jvmErasure
 private val nullValueRowMapper = RowMapper<Any?> { _, _ -> null }
 
 class KotlinMapper(clazz: Class<*>, private val prefix: String = "") : RowMapper<Any> {
+    companion object {
+        private val logger = LoggerFactory.getLogger(KotlinMapper::class.java)
+    }
     private val kClass: KClass<*> = clazz.kotlin
     private val constructor = findConstructor(kClass)
     private val constructorParameters = constructor.parameters
@@ -301,14 +305,14 @@ class KotlinMapper(clazz: Class<*>, private val prefix: String = "") : RowMapper
                                      propertiesWithMappers: Map<KMutableProperty1<*, *>, ParamData>) {
         constructorParametersWithMappers.forEach { (param, paramData) ->
             if (!paramData.propagateNull && paramData.isColumnNullable && !param.isOptional && !param.type.isMarkedNullable) {
-                println("Warning: Nullable column '${paramData.columnName}' is mapped to the non-nullable " +
+                logger.warn("Nullable column '${paramData.columnName}' is mapped to the non-nullable " +
                     "constructor parameter without default value '${param.name}' for constructor " +
                     "'${kClass.simpleName}'. This may cause runtime null pointer exception.")
             }
         }
         propertiesWithMappers.forEach { (prop, paramData) ->
             if (!paramData.propagateNull && paramData.isColumnNullable && !prop.returnType.isMarkedNullable) {
-                println("Warning: Nullable column '${paramData.columnName}' is mapped to the non-nullable property " +
+                logger.warn("Nullable column '${paramData.columnName}' is mapped to the non-nullable property " +
                     "'${prop.name}' of class '${kClass.simpleName}'. This may cause runtime null pointer exception.")
             }
         }
