@@ -43,8 +43,8 @@ class KotlinMapperTest {
     @Before
     fun setup() {
         handle = dbRule.sharedHandle
-        handle.execute("CREATE TABLE the_things(id integer, first text, second text, third text, fourth text)")
-        handle.execute("CREATE TABLE the_other_things(id integer, other text)")
+        handle.execute("CREATE TABLE the_things(id integer NOT NULL, first text NOT NULL, second text, third text, fourth text)")
+        handle.execute("CREATE TABLE the_other_things(id integer NOT NULL, other text NOT NULL)")
     }
 
     data class DataClassWithOnlyPrimaryConstructor(val id: Int, val first: String)
