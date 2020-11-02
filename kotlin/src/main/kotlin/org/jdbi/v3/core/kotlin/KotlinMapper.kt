@@ -307,13 +307,14 @@ class KotlinMapper(clazz: Class<*>, private val prefix: String = "") : RowMapper
             if (!paramData.propagateNull && paramData.isColumnNullable && !param.isOptional && !param.type.isMarkedNullable) {
                 logger.warn("Nullable column '${paramData.columnName}' is mapped to the non-nullable " +
                     "constructor parameter without default value '${param.name}' for constructor " +
-                    "'${kClass.simpleName}'. This may cause runtime null pointer exception.")
+                    "'${kClass.simpleName}'. This may cause null pointer exception if actual value is null.")
             }
         }
         propertiesWithMappers.forEach { (prop, paramData) ->
             if (!paramData.propagateNull && paramData.isColumnNullable && !prop.returnType.isMarkedNullable) {
                 logger.warn("Nullable column '${paramData.columnName}' is mapped to the non-nullable property " +
-                    "'${prop.name}' of class '${kClass.simpleName}'. This may cause runtime null pointer exception.")
+                    "'${prop.name}' of class '${kClass.simpleName}'. This may cause null pointer exception " +
+                    "if actual value is null.")
             }
         }
     }
