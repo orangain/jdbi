@@ -29,6 +29,7 @@ import org.jdbi.v3.core.mapper.reflect.internal.PojoMapper
 import org.jdbi.v3.core.qualifier.QualifiedType
 import org.jdbi.v3.core.statement.StatementContext
 import java.sql.ResultSet
+import java.sql.ResultSetMetaData
 import java.util.Optional
 import java.util.OptionalInt
 import java.util.concurrent.ConcurrentHashMap
@@ -65,10 +66,11 @@ class KotlinMapper(clazz: Class<*>, private val prefix: String = "") : RowMapper
 
     override fun specialize(rs: ResultSet, ctx: StatementContext): RowMapper<Any?> {
         val columnNames = getColumnNames(rs)
+        val isColumnNullables = getIsColumnNullables(rs)
         val columnNameMatchers = ctx.getConfig(ReflectionMappers::class.java).columnNameMatchers
         val unmatchedColumns = columnNames.toMutableSet()
 
-        val mapper = specialize0(ctx, columnNames, columnNameMatchers, unmatchedColumns)
+        val mapper = specialize0(ctx, columnNames, columnNameMatchers, unmatchedColumns, isColumnNullables)
             .orElseThrow {
                 IllegalArgumentException(
                     "Mapping Kotlin type ${kClass.simpleName} didn't find any columns matching required, " +
@@ -89,12 +91,13 @@ class KotlinMapper(clazz: Class<*>, private val prefix: String = "") : RowMapper
     private fun specialize0(ctx: StatementContext,
                             columnNames: List<String>,
                             columnNameMatchers: List<ColumnNameMatcher>,
-                            unmatchedColumns: MutableSet<String>
+                            unmatchedColumns: MutableSet<String>,
+                            isColumnNullables: List<Boolean>
     ): Optional<RowMapper<Any?>> {
         val resolvedConstructorParameters = constructorParameters
             .map { parameter ->
                 parameter to resolveConstructorParameterMapper(
-                        ctx, parameter, columnNames, columnNameMatchers, unmatchedColumns)
+                        ctx, parameter, columnNames, columnNameMatchers, unmatchedColumns, isColumnNullables)
             }
             .sortedBy { it -> if (it.second.propagateNull) 0 else 1 }
             .associate { it -> it }
@@ -120,7 +123,8 @@ class KotlinMapper(clazz: Class<*>, private val prefix: String = "") : RowMapper
 
         val memberPropertyMappers = memberProperties
             .associate { property ->
-                property to resolveMemberPropertyMapper(ctx, property, columnNames, columnNameMatchers, unmatchedColumns)
+                property to resolveMemberPropertyMapper(
+                    ctx, property, columnNames, columnNameMatchers, unmatchedColumns, isColumnNullables)
             }
 
         if (explicitlyMappedConstructorParameters.isEmpty() && memberPropertyMappers.isEmpty()) {
@@ -173,7 +177,8 @@ class KotlinMapper(clazz: Class<*>, private val prefix: String = "") : RowMapper
                                                   parameter: KParameter,
                                                   columnNames: List<String>,
                                                   columnNameMatchers: List<ColumnNameMatcher>,
-                                                  unmatchedColumns: MutableSet<String>
+                                                  unmatchedColumns: MutableSet<String>,
+                                                  isColumnNullables: List<Boolean>
     ): ParamData {
         val parameterName = parameter.paramName()
 
@@ -192,7 +197,12 @@ class KotlinMapper(clazz: Class<*>, private val prefix: String = "") : RowMapper
                         } else {
                             mapper
                         }
-                        ParamData(ParamResolution.MAPPED, SingleColumnMapper(m, columnIndex.asInt + 1), propagateNull)
+                        ParamData(
+                            ParamResolution.MAPPED,
+                            SingleColumnMapper(m, columnIndex.asInt + 1),
+                            propagateNull,
+                            columnNames[columnIndex.asInt],
+                            isColumnNullables[columnIndex.asInt])
                     }
                     .orElseThrow {
                         IllegalArgumentException(
@@ -210,7 +220,7 @@ class KotlinMapper(clazz: Class<*>, private val prefix: String = "") : RowMapper
                     .computeIfAbsent(parameter) { p ->
                         KotlinMapper(p.type.jvmErasure.java, nestedPrefix)
                     }
-                    .specialize0(ctx, columnNames, columnNameMatchers, unmatchedColumns)
+                    .specialize0(ctx, columnNames, columnNameMatchers, unmatchedColumns, isColumnNullables)
                 if (nestedMapper.isPresent) {
                     return ParamData(ParamResolution.MAPPED, nestedMapper.get(), propagateNull)
                 }
@@ -233,7 +243,8 @@ class KotlinMapper(clazz: Class<*>, private val prefix: String = "") : RowMapper
                                             property: KMutableProperty1<*, *>,
                                             columnNames: List<String>,
                                             columnNameMatchers: List<ColumnNameMatcher>,
-                                            unmatchedColumns: MutableSet<String>
+                                            unmatchedColumns: MutableSet<String>,
+                                            isColumnNullables: List<Boolean>
     ): ParamData {
         val propertyName = property.propName()
         val nested = property.javaField?.getAnnotation(Nested::class.java)
@@ -253,7 +264,13 @@ class KotlinMapper(clazz: Class<*>, private val prefix: String = "") : RowMapper
 
             val type = property.returnType.javaType
             return ctx.findColumnMapperFor(type)
-                    .map { mapper -> ParamData(ParamResolution.MAPPED, SingleColumnMapper(mapper, columnIndex + 1), propagateNull) }
+                    .map { mapper -> ParamData(
+                        ParamResolution.MAPPED,
+                        SingleColumnMapper(mapper, columnIndex + 1),
+                        propagateNull,
+                        columnNames[columnIndex],
+                        isColumnNullables[columnIndex])
+                    }
                     .orElseThrow {
                         IllegalArgumentException(
                             "Could not find column mapper for type '$type' of property " +
@@ -270,7 +287,7 @@ class KotlinMapper(clazz: Class<*>, private val prefix: String = "") : RowMapper
                     ParamResolution.MAPPED,
                     nestedPropertyMappers
                         .computeIfAbsent(property) { p -> KotlinMapper(p.returnType.jvmErasure.java, nestedPrefix) }
-                        .specialize0(ctx, columnNames, columnNameMatchers, unmatchedColumns)
+                        .specialize0(ctx, columnNames, columnNameMatchers, unmatchedColumns, isColumnNullables)
                         .orElse(null),
                     propagateNull)
             }
@@ -298,7 +315,9 @@ class KotlinMapper(clazz: Class<*>, private val prefix: String = "") : RowMapper
     private data class ParamData(
         val type: ParamResolution,
         val mapper: RowMapper<*>?,
-        val propagateNull: Boolean
+        val propagateNull: Boolean,
+        val columnName: String = "",
+        val isColumnNullable: Boolean = false
     )
 
     private fun kotlinDefaultMapper(mapper: ColumnMapper<*>): ColumnMapper<*> =
@@ -320,4 +339,10 @@ private fun <C : Any> findSecondaryConstructor(kClass: KClass<C>): KFunction<C> 
     } else {
         throw IllegalArgumentException("A bean, ${kClass.simpleName} was mapped which was not instantiable (cannot find appropriate constructor)")
     }
+}
+
+private fun getIsColumnNullables(rs: ResultSet): List<Boolean> {
+    val metadata = rs.metaData
+    val count = metadata.columnCount
+    return (1..count).map { metadata.isNullable(it) == ResultSetMetaData.columnNullable }
 }
