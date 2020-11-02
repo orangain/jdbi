@@ -121,16 +121,21 @@ class KotlinMapper(clazz: Class<*>, private val prefix: String = "") : RowMapper
             )
         }
 
-        val memberPropertyMappers = memberProperties
-            .associate { property ->
-                property to resolveMemberPropertyMapper(
-                    ctx, property, columnNames, columnNameMatchers, unmatchedColumns, isColumnNullables)
-            }
-
-        if (explicitlyMappedConstructorParameters.isEmpty() && memberPropertyMappers.isEmpty()) {
+        if (explicitlyMappedConstructorParameters.isEmpty() && memberProperties.isEmpty()) {
             // no constructor parameters or properties are mapped. nothing for us to do
             return Optional.empty()
         }
+
+        val constructorParametersWithMappers = resolvedConstructorParameters
+            // We filter 'null' mappers to remove parameters with no mappers but a default value
+            .filterValues { it.mapper != null }
+        val propertiesWithMappers = memberProperties
+            .associateWith { property ->
+                resolveMemberPropertyMapper(ctx, property, columnNames, columnNameMatchers, unmatchedColumns, isColumnNullables)
+            }
+            .filterValues { it.mapper != null }
+
+        warnNullableMappings(constructorParametersWithMappers, propertiesWithMappers)
 
         val nullMarkerColumn =
             Optional.ofNullable(kClass.findAnnotation<PropagateNull>())
@@ -141,9 +146,7 @@ class KotlinMapper(clazz: Class<*>, private val prefix: String = "") : RowMapper
                 return@mapped null
             }
 
-            val constructorParametersWithValues = resolvedConstructorParameters
-                // We filter 'null' mappers to remove parameters with no mappers but a default value
-                .filterValues { it.mapper != null }
+            val constructorParametersWithValues = constructorParametersWithMappers
                 .mapValues {
                     val v = it.value.mapper?.map(r, c)
                     if (v == null && it.value.propagateNull) {
@@ -153,15 +156,13 @@ class KotlinMapper(clazz: Class<*>, private val prefix: String = "") : RowMapper
                 }
                 .filterValues { it != ParamResolution.USE_DEFAULT }
 
-            val memberPropertiesWithValues = memberProperties
-                .filter { memberPropertyMappers.get(it)?.mapper != null }
-                .associate { it ->
-                    val prop = memberPropertyMappers.get(it)
-                    val v = prop?.mapper?.map(r, c)
-                    if (v == null && prop!!.propagateNull) {
+            val memberPropertiesWithValues = propertiesWithMappers
+                .mapValues { it ->
+                    val v = it.value.mapper?.map(r, c)
+                    if (v == null && it.value.propagateNull) {
                         return@mapped null
                     }
-                    it to v
+                    v
                 }
             constructor.isAccessible = true
             constructor.callBy(constructorParametersWithValues).also { instance ->
@@ -294,6 +295,23 @@ class KotlinMapper(clazz: Class<*>, private val prefix: String = "") : RowMapper
         }
 
         return ParamData(ParamResolution.UNMAPPED, null, propagateNull)
+    }
+
+    private fun warnNullableMappings(constructorParametersWithMappers: Map<KParameter, ParamData>,
+                                     propertiesWithMappers: Map<KMutableProperty1<*, *>, ParamData>) {
+        constructorParametersWithMappers.forEach { (param, paramData) ->
+            if (!paramData.propagateNull && paramData.isColumnNullable && !param.isOptional && !param.type.isMarkedNullable) {
+                println("Warning: Nullable column '${paramData.columnName}' is mapped to the non-nullable " +
+                    "constructor parameter without default value '${param.name}' for constructor " +
+                    "'${kClass.simpleName}'. This may cause runtime null pointer exception.")
+            }
+        }
+        propertiesWithMappers.forEach { (prop, paramData) ->
+            if (!paramData.propagateNull && paramData.isColumnNullable && !prop.returnType.isMarkedNullable) {
+                println("Warning: Nullable column '${paramData.columnName}' is mapped to the non-nullable property " +
+                    "'${prop.name}' of class '${kClass.simpleName}'. This may cause runtime null pointer exception.")
+            }
+        }
     }
 
     private fun KParameter.paramName(): String? {
